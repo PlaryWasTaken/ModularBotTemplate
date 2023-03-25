@@ -10,7 +10,7 @@ import {
     RoleSelectMenuBuilder,
     SlashCommandBuilder,
     StringSelectMenuBuilder,
-    ComponentType
+    ComponentType, StringSelectMenuInteraction
 } from "discord.js";
 import fuse from "fuse.js";
 import {
@@ -91,7 +91,7 @@ function getOptionDisplay(option: GenericOption): { name: string, button: Button
     return result as { name: string, button: ButtonBuilder }
 }
 
-function handleBoolean(embed: EmbedBuilder, setting: GenericPrimitiveOption<"boolean">, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleBoolean(embed: EmbedBuilder, setting: GenericPrimitiveOption<"boolean">, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: boolean, embed: EmbedBuilder }>(async (resolve, reject) => {
         const newValue = !setting.value
         await interaction.reply({
@@ -106,7 +106,7 @@ function handleBoolean(embed: EmbedBuilder, setting: GenericPrimitiveOption<"boo
     })
 }
 
-function handleString(embed: EmbedBuilder, setting: GenericPrimitiveOption<"text">, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleString(embed: EmbedBuilder, setting: GenericPrimitiveOption<"text">, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string, embed: EmbedBuilder }>(async (resolve, reject) => {
         if (!interaction.channel) return
         embed.setFooter({text: 'Atualmente editando!'})
@@ -125,7 +125,7 @@ function handleString(embed: EmbedBuilder, setting: GenericPrimitiveOption<"text
         resolve({interaction: interaction, value: value.content, embed})
     })
 }
-function handleRole(embed: EmbedBuilder, setting: GenericPrimitiveOption<"role">, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleRole(embed: EmbedBuilder, setting: GenericPrimitiveOption<"role">, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string, embed: EmbedBuilder }>(async (resolve, reject) => {
         embed.setFooter({text: 'Atualmente editando!'})
         const row6 = new ActionRowBuilder<RoleSelectMenuBuilder>()
@@ -148,7 +148,7 @@ function handleRole(embed: EmbedBuilder, setting: GenericPrimitiveOption<"role">
     })
 }
 
-function handleChannel(embed: EmbedBuilder, setting: GenericPrimitiveOption<"channel">, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleChannel(embed: EmbedBuilder, setting: GenericPrimitiveOption<"channel">, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string, embed: EmbedBuilder }>(async (resolve, reject) => {
         embed.setFooter({text: 'Atualmente editando!'})
         const row6 = new ActionRowBuilder<ChannelSelectMenuBuilder>()
@@ -171,13 +171,13 @@ function handleChannel(embed: EmbedBuilder, setting: GenericPrimitiveOption<"cha
     })
 }
 
-function handleButton(embed: EmbedBuilder, setting: ButtonOption, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleButton(embed: EmbedBuilder, setting: ButtonOption, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string, embed: EmbedBuilder }>(async (resolve, reject) => {
         return resolve({interaction: interaction, value: "true", embed})
     })
 }
 
-function handleSelect(embed: EmbedBuilder, setting: SelectOption, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleSelect(embed: EmbedBuilder, setting: SelectOption, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string[], embed: EmbedBuilder }>(async (resolve, reject) => {
         embed.setFooter({text: 'Atualmente editando!'})
         const row6 = new ActionRowBuilder<StringSelectMenuBuilder>()
@@ -206,7 +206,7 @@ function handleSelect(embed: EmbedBuilder, setting: SelectOption, interaction: B
     })
 }
 
-function handleUser(embed: EmbedBuilder, setting: GenericPrimitiveOption<"user">, interaction: ButtonInteraction, client: ExtendedClient, guild: Guild) {
+function handleUser(embed: EmbedBuilder, setting: GenericPrimitiveOption<"user">, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise<{ interaction: any, value: string, embed: EmbedBuilder }>(async (resolve, reject) => {
         embed.setFooter({text: 'Atualmente editando!'})
         await interaction.update({embeds: [embed], components: []})
@@ -228,9 +228,52 @@ function handleUser(embed: EmbedBuilder, setting: GenericPrimitiveOption<"user">
     })
 }
 
-function handleObject(embed: EmbedBuilder, setting: ObjectOption, interaction: ChatInputCommandInteraction, client: ExtendedClient, guild: Guild) {
+function handleObject(embed: EmbedBuilder, setting: ObjectOption, interaction: ButtonInteraction | StringSelectMenuInteraction, client: ExtendedClient, guild: Guild) {
     return new Promise(async (resolve, reject) => {
-        const values = setting.value?.filter((o) => (setting.value ? setting.value?.includes(o) : (setting.default ? setting.default?.includes(o) : false)))
+        const options = setting.structure.map((s) => {
+            return {
+                label: s.name,
+                value: s.id
+            }
+        })
+        const row6 = new ActionRowBuilder<StringSelectMenuBuilder>()
+            .setComponents([
+                new StringSelectMenuBuilder()
+                    .setCustomId('select')
+                    .setPlaceholder('Selecione uma opcão')
+                    .setMaxValues(1)
+                    .setMinValues(1)
+                    .setOptions(options)
+            ])
+        await interaction.update({embeds: [embed], components: [row6]})
+        const msg = await interaction.channel?.awaitMessageComponent({
+            filter: (m) => m.user.id === interaction.user.id,
+            time: 60000
+
+        })
+        if (!msg || !msg.isStringSelectMenu()) return
+        const value = msg.values[0]
+        if (!value) return
+        const option = setting.structure.find((s) => s.id === value)
+        if (!option) return
+        const optionDisplayOptions = getOptionDisplay(option)
+        const index = setting.structure.findIndex((s) => s.id === value)
+        const embed2 = new EmbedBuilder()
+            .setTitle(`Configuração: ${option.name}`)
+            .setDescription(option.description)
+            .setColor('#aaffff')
+            .setFooter({text: 'Atualmente editando!'})
+            .setFields([
+                {
+                    name: 'Valor atual',
+                    value: setting.value ? [index] + '' : 'Nenhum'
+                }
+            ])
+        await msg.reply({embeds: [embed2], components: []})
+        switch (option.type) {
+            case 'boolean':
+
+        }
 
     })
 }
@@ -442,6 +485,9 @@ export default new SlashCommand({
                             i.editReply({content: 'Ocorreu um erro ao atualizar a configuração!\n' + err.reason})
                             return
                         })
+                    break;
+                case "object":
+                    const result8 = await handleObject(embed, setting as ObjectOption, i, client, guild).catch((err) => err + '')
                     break;
 
             }
