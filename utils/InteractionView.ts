@@ -8,6 +8,7 @@ import {
 } from "discord.js";
 import {EventEmitter} from "events";
 import {Awaitable} from "@discordjs/util";
+import {genRandomHexId} from "../util/stringRelated";
 
 type ExtraOptions =  {
     ephemeral?: boolean,
@@ -16,9 +17,7 @@ type ExtraOptions =  {
 }
 
 
-function genRandomHexId(): string {
-    return Math.floor(Math.random() * 16777215).toString(16);
-}
+
 function addRandomIdToButtons(rows: ActionRowBuilder[], id: string): any {
     return rows.map((row) => {
         row.setComponents(row.components.map((component) => {
@@ -44,6 +43,7 @@ export class InteractionView extends EventEmitter {
     public readonly interaction: RepliableInteraction;
     public readonly channel: GuildTextBasedChannel;
     public readonly client: ExtendedClient;
+    public latestUpdate: MessageViewUpdate = {};
     private extraFilter: (interaction: RepliableInteraction) => boolean = () => true;
     private msgId: string = "0";
     private options: {ephemeral?: boolean} = {ephemeral: false}
@@ -58,6 +58,9 @@ export class InteractionView extends EventEmitter {
         this.client = client
         this.interaction = interaction
         this.parent = parent
+        this.latestUpdate = {
+            content: "No content yet defined",
+        }
         if ((interaction as any)?.message) this.msgId = (interaction as any).message.id
         if (extendedOptions?.ephemeral) this.options = extendedOptions
         if (extendedOptions?.filter) this.extraFilter = extendedOptions.filter
@@ -118,6 +121,7 @@ export class InteractionView extends EventEmitter {
     public async update(view: MessageViewUpdate): Promise<boolean> {
         return new Promise(async (resolve) => {
             if (view.components) view.components = addRandomIdToButtons(view.components as ActionRowBuilder[], this.viewId)
+            this.latestUpdate = view
             if (this.interaction.replied) {
                 await this.interaction.editReply(view).then(() => {
                     return resolve(true)

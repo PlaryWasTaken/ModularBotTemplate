@@ -10,6 +10,7 @@ import {
 } from "discord.js";
 import {EventEmitter} from "events";
 import {Awaitable} from "@discordjs/util";
+import {genRandomHexId} from "../util/stringRelated";
 
 type ExtraOptions = {
     filter: (interaction: RepliableInteraction) => boolean,
@@ -51,9 +52,6 @@ export function CreateViewFromMessage(message: Message, client: ExtendedClient, 
         resolve(viewClass)
     })
 }
-function genRandomHexId(): string {
-    return Math.floor(Math.random() * 16777215).toString(16);
-}
 
 function addRandomIdToButtons(rows: ActionRowBuilder[], id: string): any {
     return rows.map((row) => {
@@ -80,8 +78,10 @@ export class MessageView extends EventEmitter {
     public readonly message: Message;
     public readonly channel: GuildTextBasedChannel;
     public readonly client: ExtendedClient;
+    public latestUpdate: MessageViewUpdate = {};
     private msgId: string = "0";
     private timeout: NodeJS.Timeout | null = null
+    private timeoutMs: number | null = null
     private readonly interactionListener: (interaction: RepliableInteraction<CacheType>) => Awaitable<void>
     private readonly messageDeleteListener: (message: Message) => Awaitable<void>
     private viewId: string = genRandomHexId()
@@ -92,8 +92,17 @@ export class MessageView extends EventEmitter {
         this.client = client
         this.message = message
         this.msgId = message.id
+        this.latestUpdate = {
+            embeds: message.embeds,
+            components: message.components,
+            content: message.content,
+            files: Array.from(message.attachments.values())
+        }
         if (filter) this.extraFilter = filter
-        if (timeout !== 0) this.setTimeout(timeout || 60000)
+        if (timeout !== 0) {
+            this.setTimeout(timeout || 60000)
+            this.timeoutMs = timeout ?? null
+        }
         this.interactionListener = (interaction) => {
             if ((interaction as any).message && (interaction as any).message.id === this.msgId) {
                 const split = (interaction as any).customId.split("-")
@@ -148,7 +157,7 @@ export class MessageView extends EventEmitter {
     public async update(view: MessageViewUpdate): Promise<boolean> {
         return new Promise(async (resolve) => {
             if (view.components) view.components = addRandomIdToButtons(view.components as ActionRowBuilder[], this.viewId)
-
+                this.latestUpdate = view
                 await this.message.edit({
                     ...view,
                 }).then(() => {
@@ -160,7 +169,7 @@ export class MessageView extends EventEmitter {
         })
     }
     public clone() {
-        const cloned = new MessageView(this.message, this.channel, this.client, this.extraFilter )
+        const cloned = new MessageView(this.message, this.channel, this.client, this.extraFilter,  this.timeoutMs ?? undefined)
         cloned.setMsgId(this.msgId)
         return cloned
     }

@@ -7,6 +7,7 @@ import {StopWatch} from "@slime/stopwatch";
 
 async function getAllSettings(client: ExtendedClient, guildData: any, guild: discordGuild, logger: Logger) {
     const settings = client.modules.map((module) => module.settings).flat()
+    console.log(settings.map(sett => sett.id))
     const settingsMap = new Collection<string, Setting<unknown>>()
     const stopWatch = new StopWatch()
     const perfStats = new Collection<string, number>()

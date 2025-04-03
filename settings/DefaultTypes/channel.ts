@@ -101,7 +101,10 @@ export class ChannelSettingFile implements Setting<GuildBasedChannel> {
             if (discordGuildOrUser instanceof DiscordUser) return reject('Host is not a guild')
             await discordGuildOrUser.channels.fetch(config).then(channel => {
                 resolve(channel as GuildBasedChannel)
-            }).catch(() => reject)
+            }).catch(() => {
+                //@ts-ignore
+                resolve(undefined)
+            })
         })
     }
     public parseToField(value: Exclude<GuildBasedChannel, DMChannel | PartialDMChannel>) {

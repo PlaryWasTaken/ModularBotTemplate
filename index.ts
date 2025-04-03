@@ -17,7 +17,7 @@ import {FlagsManager} from "./classes/managers/FlagsManager";
 import chalk from "chalk";
 import {PermissionsManager} from "./classes/managers/PermissionsManager";
 import {ChannelsNamespace, RolesNamespace, UsersNamespace} from "./defaults/permissionNamespaces";
-import {sleep} from "./util/sleep";
+import SharedClientsManager from "./classes/managers/SharedClientsManager";
 
 require('dotenv').config();
 
@@ -73,7 +73,7 @@ function createLogger(service: string, hexColor: string): winston.Logger {
                 format: winston.format.combine(
                     winston.format.colorize(),
                     winston.format.label({label: path.basename(module.filename)}),
-                    winston.format.printf(info => `${info.fallback?chalk.red("FALLBACK") + " ":""}${chalk.hex(info.hexColor)(`(${info.service})`)} [${info.label} - ${info.level}] ${info.message}`),
+                    winston.format.printf(info => `${info.fallback?chalk.red("FALLBACK") + " ":""}${chalk.hex(info.hexColor as string)(`(${info.service})`)} [${info.label} - ${info.level}] ${info.message}`),
                     winston.format.splat(),
                 )
             })
@@ -195,6 +195,7 @@ dClient.login(process.env.DISCORD_TOKEN).then(async (): Promise<void> => {
     client.cachedEvents = new Collection();
     client.settingsHandler = new SettingsManager(client, logger.child({service: 'Settings Manager', hexColor: '#bbaaff'}));
     client.permissionHandler = new PermissionsManager(client, logger.child({service: 'Permissions Manager', hexColor: '#bbaaff'}) );
+    client.sharedClients = new SharedClientsManager(client)
     client.logger = logger;
     logger.info('Profile handler and Guild Handler loaded');
     client.permissionHandler.registerNode("Role.*", RolesNamespace)

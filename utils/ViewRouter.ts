@@ -27,7 +27,10 @@ export class ViewRouter extends EventEmitter {
     private readonly snowflaker: snowflakify;
     public view: AnyView;
     private forcedRows: ActionRowBuilder[] = [];
-    constructor(logger: Logger, view: AnyView) {
+    public namedRoutes: Record<string, {
+        viewFn: (context: Record<string, any>) => MessageViewUpdate,
+    }> = {};
+    constructor(logger: Logger, view: AnyView, baseRouteFn?: (context: Record<string, any>) => MessageViewUpdate) {
         super();
         this.logger = logger.child({
             service: 'ViewRouter',
@@ -36,25 +39,47 @@ export class ViewRouter extends EventEmitter {
         this.snowflaker = new snowflakify();
         this.view = view;
         forwardEvents(view, this);
+        this.namedRoutes = {
+            "/": { // Base named route
+                viewFn: baseRouteFn ?? (() => view.latestUpdate)
+            }
+        }
         view.on("returnPage", async () => {
             await this.pop();
         })
     }
+    public addNamedRoute(name: string, viewFn: (context: Record<string, any>) => MessageViewUpdate) {
+        this.namedRoutes[name] = {viewFn}
+    }
+    //* Pushing a named route will remove all unnamed routes from the stack and push the named route on top */
+    public async pushToNamed(route: string, context: Record<string, any>) {
+        const routeData = this.namedRoutes[route];
+        if (!routeData) {
+            this.logger.error(`Route ${route} not found`);
+            return;
+        }
+        const update = routeData.viewFn(context);
+        this.clearStack();
+        await this.push(update);
+    }
+    /*
+    If i re-implement this, remember to delete the oldview or have a way to handle the forwarded events from it
     public setView(view: AnyView) {
         this.view = view;
+        forwardEvents(view, this);
     }
+     */
     public setRows(rows: ActionRowBuilder[]) {
         this.forcedRows = rows;
     }
+
     public async push(update: MessageViewUpdate) {
         const id = this.snowflaker.nextHexId();
         this.stack.push({style: update, id});
         this.view.setId(id);
-        if (update.components) {
-            update.components = [...update.components, ...this.forcedRows as any];
-        } else {
-            update.components = this.forcedRows as any;
-        }
+        if (update.components) update.components = [...update.components, ...this.forcedRows as any];
+        else update.components = this.forcedRows as any;
+
         await this.view.update(update);
         return id;
     }

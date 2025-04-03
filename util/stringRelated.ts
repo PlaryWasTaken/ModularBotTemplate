@@ -1,4 +1,4 @@
-import {array, boolean, either, number, object, optional, string} from "decoders";
+import {array, boolean, number, object, optional, string} from "decoders";
 import {InfiniteArray} from "./types";
 
 export function generateDecoderForEmbedJSON() {
@@ -54,4 +54,7 @@ export function generateIndentation(values: InfiniteArray<string>, depth: number
         }
     }
     return newText
+}
+export function genRandomHexId(): string {
+    return Math.floor(Math.random() * 16777215).toString(16);
 }

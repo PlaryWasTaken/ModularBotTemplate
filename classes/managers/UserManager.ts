@@ -45,7 +45,7 @@ async function getAllSettings (client: ExtendedClient, userData: any, guild: dis
             }
         }
         stopWatch.stopTimer()
-        logger.debug(`Loaded setting ${setting.id} in ${stopWatch.getTimeElapsedInMs}ms`)
+        logger.debug(`Loaded setting ${setting.id} in ${stopWatch.getTimeElapsedInMs}ms for ${user.id}. Load present: ${!!setting.load}, Parse present: ${!!setting.parse}, Has data ${!!settingData}`)
         settingsMap.set(setting.id, setting)
         stopWatch.reset()
     }
@@ -54,7 +54,7 @@ async function getAllSettings (client: ExtendedClient, userData: any, guild: dis
 
 export default class userHandler {
     private readonly client: ExtendedClient;
-    private logger: Logger;
+    private readonly logger: Logger;
     constructor(client: ExtendedClient, logger: Logger) {
         this.client = client
         this.logger = logger
@@ -146,6 +146,16 @@ export default class userHandler {
                 userProfile = await this.client.defaultModels.user.findOne({id: id, guildId: guild})
             }
             resolve(userProfile)
+        })
+    }
+    fetchDocumentsFromDB(filter: any): Promise<Array<HydratedDocument<any>>> {
+        return new Promise(async (resolve, reject) => {
+            if (this.client.globalLock.isBusy('fullyReady')) await this.client.globalLock.acquire('fullyReady', () => {})
+
+            const userProfiles = await this.client.defaultModels.user.find(filter)
+            if (!userProfiles || userProfiles.length === 0) return reject('No user profiles!')
+
+            return resolve(userProfiles)
         })
     }
 

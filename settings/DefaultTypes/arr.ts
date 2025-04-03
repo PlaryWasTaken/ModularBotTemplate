@@ -267,10 +267,10 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
     }
     parseToDatabase(value: Return[]) {
         if (this.child.parseToDatabase) {
-            return value.map((value) => {
+            return Array.isArray(value) ? value.map((value) => {
                 // @ts-ignore
                 return this.child.parseToDatabase(value)
-            })
+            }) : [];
         } else {
             return value
         }

@@ -18,7 +18,7 @@ export class ObjectFlags {
         this.object = object
         this.logger = client.logger.child({service: `${object.id} Flags`, hexColor: '#aa00ff'})
     }
-    public set(flag: string, value: string | boolean | string[]) {
+    public set(flag: string, value: string | boolean | string[] | number) {
         if (!this.client.flags.flags.has(flag)) {
             this.logger.warning(`Flag ${flag} is not registered, ignoring`)
             return undefined
@@ -28,7 +28,7 @@ export class ObjectFlags {
         this.object.data.save()
         return this
     }
-    public awaitableSet(flag: string, value: string | boolean | string[]) {
+    public awaitableSet(flag: string, value: string | boolean | string[] | number) {
         return new Promise((resolve, reject) => {
             if (!this.client.flags.flags.has(flag)) {
                 this.logger.warning(`Flag ${flag} is not registered, ignoring`)

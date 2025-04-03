@@ -14,9 +14,7 @@ import {
     APIEmbed,
     BaseMessageOptions,
     TextChannel,
-    TextBasedChannel,
-    PartialGroupDMChannel,
-    OmitPartialGroupDMChannel, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder, Interaction
+    OmitPartialGroupDMChannel, SlashCommandSubcommandsOnlyBuilder, SlashCommandOptionsOnlyBuilder
 } from "discord.js";
 import ProfileManager from "./classes/managers/UserManager";
 import GuildManager from "./classes/managers/GuildManager"
@@ -34,6 +32,7 @@ import AsyncLock from "async-lock";
 import {settingData} from "./index";
 import {FlagsManager} from "./classes/managers/FlagsManager";
 import {PermissionsManager} from "./classes/managers/PermissionsManager";
+import SharedClientsManager from "./classes/managers/SharedClientsManager";
 
 type configFunc = (args: {
     client: ExtendedClient,
@@ -145,6 +144,8 @@ interface ExtendedClient extends Client {
     };
     settingsHandler: SettingsManager;
     cachedEvents: Collection<string, Event<any>[]>;
+
+    sharedClients: SharedClientsManager;
 
     on<K extends keyof ExtendedClientEvents>(event: K, listener: (...args: ExtendedClientEvents[K]) => Awaitable<void>): this;
 

@@ -2,13 +2,34 @@ import SlashCommand from "../../classes/structs/SlashCommand";
 import {
     SlashCommandBuilder,
     PermissionsBitField,
-    GuildTextBasedChannel
+    GuildTextBasedChannel, GuildMember, TextChannel
 } from "discord.js";
 import fuse from "fuse.js";
 import {InteractionView} from "../../utils/InteractionView";
 import {defaultSaveMethod, Setting} from "../../settings/Setting";
+import User from "../../classes/structs/User";
+import {ExtendedClient} from "../../types";
 
 
+export async function saveSetting(setting: Setting<unknown>, result: any, profile: User, isGuild: boolean, client: ExtendedClient) {
+    if (!result) {
+        setting.value = undefined
+    } else {
+        setting.value = result
+    }
+    if (isGuild) client.guildHandler.invalidateCache(profile.guild.id)
+    if (setting.save) {
+        await setting.save(profile.guild, result, profile)
+    } else {
+        const entity = isGuild ? profile.guild : profile
+        await defaultSaveMethod(client, entity, setting)
+    }
+}
+export async function addValueToArraySettingAndSave(setting: Setting<unknown>, addedValue: any, profile: User, isGuild: boolean, client: ExtendedClient) {
+    const value = setting.value as Array<unknown>
+    value.push(addedValue)
+    return saveSetting(setting, value, profile, isGuild, client)
+}
 
 export default new SlashCommand({
     data: new SlashCommandBuilder()
@@ -37,7 +58,18 @@ export default new SlashCommand({
         }
         if (!guildSetting && !userSetting ) return interaction.reply({content: 'Configuração não encontrada.. :(', ephemeral: true});
         const setting = (guildSetting || userSetting) as Setting<unknown>
-        if (setting.permission && !profile.member.permissions.has(setting.permission)) return interaction.reply({
+
+        const overrides = guild.permissionOverrides.getEndNode(`Setting.${setting.id}`);
+        let computed: boolean | null = null;
+        if (overrides) {
+            computed = await client.permissionHandler.computePermissions(overrides, interaction.member as GuildMember, interaction.channel as TextChannel);
+            if (computed === false) return interaction.reply({
+                content: `Você não tem permissão para mudar essa configuração`,
+                ephemeral: true
+            })
+        }
+
+        if (setting.permission && !profile.member.permissions.has(setting.permission) && computed !== true ) return interaction.reply({
             content: 'Você não tem permissão para mudar essa configuração',
             ephemeral: true
         });
@@ -59,25 +91,16 @@ export default new SlashCommand({
             })
         })
         const result = await setting.run(view);
-        if (!result) {
-            setting.value = undefined
-        } else {
-            setting.value = result
-        }
-        if (guildSetting) client.guildHandler.invalidateCache(guild.guild.id)
-        if (setting.save) {
-            await setting.save(guild, result, profile)
-        } else {
-            const entity = guildSetting ? guild : profile
-            await defaultSaveMethod(client, entity, setting)
-        }
+        await saveSetting(setting, result, profile, !!guildSetting, client);
     },
     global: true,
-    autoCompleteFunc: async ({interaction, guild, profile}) => {
+    autoCompleteFunc: async ({interaction, guild, profile, client}) => {
         if (!interaction.inGuild()) return interaction.respond([{
             name: 'Este comando só pode ser usado em servidores',
             value: 'null'
         }]);
+
+
         function testCondition(setting: Setting<unknown>) {
             if (setting.condition) {
                 return setting.condition(guild, profile)
@@ -98,7 +121,24 @@ export default new SlashCommand({
                 permission: setting.permission || PermissionsBitField.Flags.SendMessages
             }
         })
-        const result = new fuse([...guilds, ...users], {
+        const allSettings = [...guilds, ...users]
+        const allowedSettings = [] as typeof allSettings
+        for (const setting of allSettings) {
+            const overrides = guild.permissionOverrides.getEndNode(`Setting.${setting.id}`);
+            let computed: boolean | null = null;
+            if (overrides) {
+                computed = await client.permissionHandler.computePermissions(overrides, interaction.member as GuildMember, interaction.channel as TextChannel);
+                if (computed === true) {
+                    allowedSettings.push(setting)
+                    continue
+                }
+            }
+            if (typeof interaction.member.permissions !== 'string' &&
+                interaction.member.permissions.has(setting.permission || PermissionsBitField.Flags.Administrator)
+            ) allowedSettings.push(setting)
+        }
+
+        const result = new fuse(allowedSettings, {
             keys: ['name'],
             includeScore: true,
             threshold: 1,
@@ -106,12 +146,11 @@ export default new SlashCommand({
             findAllMatches: true,
             distance: 800
         })
-        const settings = (result.search(interaction.options.getString('configuração') || 'abc', {
-            limit: 23
-        }).map(result => result.item)).filter(setting => {
-            if (typeof interaction.member.permissions === 'string') return false
-            return interaction.member.permissions.has(setting.permission || PermissionsBitField.Flags.Administrator)
-        });
+        const settings = allowedSettings.length > 24 ? (result.search(interaction.options.getString('configuração') || 'abc', {
+                limit: 23
+            }).map(result => result.item)) : allowedSettings;
+
+
         await interaction.respond(settings.map(setting => {
             return {
                 name: `${setting.displayName}`,
