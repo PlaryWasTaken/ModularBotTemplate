@@ -65,9 +65,9 @@ export class DynamicSelectSetting implements Setting<string[]> {
 
     public run(view: InteractionView): Promise<string[]> {
         return new Promise(async (resolve) => {
+            console.log(1)
             const user = await view.client.profileHandler.fetchOrCreate(view.interaction.user.id, view.interaction.guildId as string)
             this.options = await this.getFn(user)
-            console.log(this.options)
             if (this.style === "StringSelectMenu") {
                 const embed = new EmbedBuilder()
                     .setTitle(`Configurar ${this.name}`)

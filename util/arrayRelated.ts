@@ -7,3 +7,7 @@ export function arrayChunk<T>(array: Array<T>, size: number): T[][] {
     }
     return chunkedArray
 }
+export function chooseRandom<T>(array: Array<T>): T {
+    if (array.length === 1) return array[0]
+    return array[Math.floor(Math.random() * array.length)]
+}

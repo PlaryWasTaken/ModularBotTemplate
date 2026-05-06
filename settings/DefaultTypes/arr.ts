@@ -1,13 +1,17 @@
 import {
     ActionRowBuilder,
+    APIEmbed,
     ButtonBuilder,
     ButtonStyle,
-    EmbedBuilder, Guild as DiscordGuild,
+    EmbedBuilder,
+    Guild as DiscordGuild,
     StringSelectMenuBuilder
 } from "discord.js";
 import {ExtendedClient} from "../../types";
 import {InteractionView} from "../../utils/InteractionView";
 import {Setting} from "../Setting";
+import {arrayChunk} from "../../util/arrayRelated";
+import {createPaginator, Page, PaginatorFlags} from "../../utils/components/PaginatorComponent";
 
 function parseSettingToArrayFields(current: Return[], parseFunction?: (value: Return) => string) {
     const inlined = (current?.length || 0) > 5
@@ -87,47 +91,65 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
             const current = this.value ?? []
 
             let values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
-            let embed = this.overrides?.updateFn ? this.overrides.updateFn(current) :
-                this.overrides?.embed ? this.overrides.embed.setFields(values) :
-                    new EmbedBuilder()
-                        .setTitle(`Configurar ${this.name}`)
-                        .setDescription(this.description)
-                        .setFields(values)
-                        .setColor(`#ffffff`)
-            const menuRow = new ActionRowBuilder<StringSelectMenuBuilder>()
-                .setComponents([
-                    new StringSelectMenuBuilder()
-                        .setCustomId('select')
-                        .setPlaceholder('Selecione uma opção')
-                        .addOptions(current.map((value, index) => {
-                            return {
-                                label: index + 1 + '',
-                                value: index + ''
-                            }
-                        }))
-                ])
-            const controlRow = new ActionRowBuilder<ButtonBuilder>()
-                .setComponents([
-                    new ButtonBuilder()
-                        .setCustomId('add')
-                        .setLabel('Adicionar')
-                        .setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder()
-                        .setCustomId('remove')
-                        .setLabel('Remover')
-                        .setStyle(ButtonStyle.Danger),
-                    new ButtonBuilder()
-                        .setCustomId('confirm')
-                        .setLabel('Confirmar alterações')
-                        .setStyle(ButtonStyle.Success)
-                ])
-            const rowArr: any[] = []
-            if (values.length > 0) rowArr.push(menuRow)
-            rowArr.push(controlRow)
-            await view.update({
-                embeds: [embed],
-                components: rowArr
-            })
+
+
+            function generatePages(setting: ArraySetting) {
+                const chunked = arrayChunk(values, 24)
+                const pages = [] as Page[]
+                let i = 0;
+                do {
+                    const values = chunked[i] || []
+                    const menuRow = new ActionRowBuilder<StringSelectMenuBuilder>()
+                        .setComponents([
+                            new StringSelectMenuBuilder()
+                                .setCustomId('select')
+                                .setPlaceholder('Selecione uma opção')
+                                .addOptions(values.map((_, index) => {
+                                    return {
+                                        label: index + 1 + '',
+                                        value: index + (i * 24) + ""
+                                    }
+                                }))
+                        ])
+                    const controlRow = new ActionRowBuilder<ButtonBuilder>()
+                        .setComponents([
+                            new ButtonBuilder()
+                                .setCustomId('add')
+                                .setLabel('Adicionar')
+                                .setStyle(ButtonStyle.Primary),
+                            new ButtonBuilder()
+                                .setCustomId('remove')
+                                .setLabel('Remover')
+                                .setStyle(ButtonStyle.Danger),
+                            new ButtonBuilder()
+                                .setCustomId('confirm')
+                                .setLabel('Confirmar alterações')
+                                .setStyle(ButtonStyle.Success)
+                        ])
+
+                    const rowArr: any[] = []
+                    if (values.length > 0) rowArr.push(menuRow)
+                    rowArr.push(controlRow)
+
+                    pages.push({
+                        embeds: [setting.overrides?.updateFn ? setting.overrides.updateFn(current) :
+                            setting.overrides?.embed ? setting.overrides.embed.setFields(values) :
+                                new EmbedBuilder()
+                                    .setTitle(`Configurar ${setting.name}`)
+                                    .setDescription(setting.description)
+                                    .setFields(values)
+                                    .setColor(`#ffffff`)],
+                        components: rowArr
+                    })
+                    i++
+                } while (i < chunked.length)
+                return pages
+            }
+            const pages = generatePages(this)
+            // @ts-ignore
+            console.log(pages[0].components?.[0]?.components[0].options)
+            const paginator = await createPaginator(view, pages, [PaginatorFlags.Wrap, PaginatorFlags.AutoInit, PaginatorFlags.RemoveSelect])
+
             view.on('select', async (i) => {
                 const index = parseInt(i.values[0])
                 const value = current[index]
@@ -144,15 +166,12 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
                 // Updating embed
 
                 if (this.overrides?.updateFn) {
-                    embed = this.overrides.updateFn(current)
+                    ((paginator.pages[paginator.currentPage] as unknown as Page).embeds as [EmbedBuilder])[0] = this.overrides.updateFn(current)
                 } else {
-                    const values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
-                    embed.setFields(values)
+                    values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
+                    paginator.pages = generatePages(this)
                 }
-                await view.update({
-                    embeds: [embed],
-                    components: rowArr
-                })
+                await paginator.setPage(paginator.currentPage);
             })
             view.on('confirm', async (i) => {
                 await view.update({
@@ -174,30 +193,14 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
                 clonedView.destroy()
                 if (!result) return
                 current.push(result)
-                const a = current.map((value, index) => {
-                    return {
-                        label: index + 1 + '',
-                        value: index + ''
-                    }
-                })
-                menuRow.setComponents([
-                    new StringSelectMenuBuilder()
-                        .setCustomId('select')
-                        .setPlaceholder('Selecione uma opção')
-                        .addOptions(a)
-                ])
-                if (current.length === 1) rowArr.splice(0,0, menuRow) // Add a menu if not exists
                 this.value = current
                 if (this.overrides?.updateFn) {
-                    embed = this.overrides.updateFn(current)
+                    ((paginator.pages[paginator.currentPage] as unknown as Page).embeds as [EmbedBuilder])[0] = this.overrides.updateFn(current)
                 } else {
-                    const values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
-                    embed.setFields(values)
+                    values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
+                    paginator.pages = generatePages(this)
                 }
-                await view.update({
-                    embeds: [embed],
-                    components: rowArr
-                })
+                await paginator.setPage(paginator.currentPage);
             })
 
             /*
@@ -205,39 +208,44 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
              */
             view.on('remove', async (_) => {
                 if (current.length === 1) {
-                    embed.setFields([])
-                    embed.setFooter({
-                        text: 'Removido o valor unico'
-                    })
-                    await view.update({
-                        embeds: [embed],
-                        components: []
-                    })
-                    rowArr.splice(0,1)
+
+                    const page = {
+                        embeds: [
+                            new EmbedBuilder(pages[0]?.embeds?.[0] as APIEmbed | undefined)
+                            .setFields([])
+                            .setFooter({
+                                text: 'Removido o valor unico'
+                            })
+                        ]
+                    }
+                    paginator.pages = [page]
+                    await paginator.setPage(0);
                     current.splice(0,1)
                     if (this.overrides?.updateFn) {
-                        embed = this.overrides.updateFn(current)
+                        ((paginator.pages[paginator.currentPage] as unknown as Page).embeds as [EmbedBuilder])[0] = this.overrides.updateFn(current)
+                    } else {
+                        values = []
+                        paginator.pages = generatePages(this)
                     }
-                    await view.update({
-                        embeds: [embed],
-                        components: rowArr
-                    })
+                    await paginator.setPage(0)
+
                 } else {
                     const removeEmbed = new EmbedBuilder()
                         .setTitle('Remover valor')
                         .setDescription('Selecione o valor que deseja remover')
                         .setColor('#ffffff')
+                    const chunked = arrayChunk(values.map((value, index) => {
+                        return {
+                            label: value.name,
+                            value: index + ''
+                        }
+                    }), 24)
                     const components = new ActionRowBuilder<StringSelectMenuBuilder>()
                         .setComponents([
                             new StringSelectMenuBuilder()
                                 .setCustomId('removeSelect')
                                 .setPlaceholder('Selecione uma opção')
-                                .addOptions(values.map((value, index) => {
-                                        return {
-                                            label: value.name,
-                                            value: index + ''
-                                        }
-                                    })
+                                .addOptions(chunked[paginator.currentPage]
                                 )
                                 .setMaxValues(1)
                         ])
@@ -253,15 +261,12 @@ export class ArraySetting implements Setting<Setting<unknown>["value"][]> {
                 await i.deferUpdate()
                 current.splice(index, 1)
                 values = parseSettingToArrayFields(current, this.overrides?.parseToField ?? this.child.parseToField)
-                embed.setFields(values)
-                if (current.length === 0) rowArr.splice(0,1) // Remove menu if not exists
                 if (this.overrides?.updateFn) {
-                    embed = this.overrides.updateFn(current)
+                    ((paginator.pages[paginator.currentPage] as unknown as Page).embeds as [EmbedBuilder])[0] = this.overrides.updateFn(current)
+                } else {
+                    paginator.pages = generatePages(this)
                 }
-                await view.update({
-                    embeds: [embed],
-                    components: rowArr
-                })
+                await paginator.setPage(paginator.currentPage)
             })
         })
     }

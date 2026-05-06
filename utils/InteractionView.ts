@@ -1,9 +1,9 @@
 import {ExtendedClient, MessageViewUpdate} from "../types";
 import {
-    ActionRowBuilder,
+    ActionRowBuilder, ButtonInteraction,
     CacheType, GuildTextBasedChannel,
-    Message,
-    RepliableInteraction,
+    Message, ModalBuilder,
+    RepliableInteraction, StringSelectMenuInteraction,
     TextBasedChannel
 } from "discord.js";
 import {EventEmitter} from "events";
@@ -137,10 +137,19 @@ export class InteractionView extends EventEmitter {
                     this.msgId = msg.id
                     if (this.parent) this.parent.setMsgId(msg.id)
                     return resolve(true)
-                }).catch(() => {
+                }).catch((err) => {
+                    console.log(err)
                     return resolve(false)
                 })
             }
+        })
+    }
+    public showModal(interaction: ButtonInteraction | StringSelectMenuInteraction, modal: ModalBuilder) {
+        return new Promise<void>(async (resolve) => {
+            if (!modal.data.custom_id) throw "No customID"
+            modal.setCustomId(modal.data.custom_id + "-" + this.viewId)
+            await interaction.showModal(modal)
+            return resolve()
         })
     }
     public clone() {

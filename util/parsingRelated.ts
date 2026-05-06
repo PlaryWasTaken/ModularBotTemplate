@@ -19,3 +19,17 @@ export function parseFromDatabase<T>(array: [string, T][]): RecursiveMap<T> {
     }
     return built
 }
+export function stripUserMention(args: string[]) {
+    if (!args.length) return args
+    if (/^<@!?\d+>$/.test(args[0])) {
+        args.shift()
+    }
+    return args
+}
+export function isolateDuplicates<T>(array: T[], key?: keyof T): T[] {
+    if (!key) {
+        return array.filter((x, index) => array.findIndex((y, index2) => x === y && index !== index2) !== -1)
+    } else {
+        return array.filter((x, index) => array.findIndex((y, index2) => x[key] === y[key] && index !== index2) !== -1)
+    }
+}

@@ -39,13 +39,16 @@ class PaginatorComponent extends EventEmitter {
     public readonly flags: PaginatorFlags[];
     private buttons: [ButtonBuilder, ButtonBuilder, ButtonBuilder] = [
         new ButtonBuilder()
+            .setCustomId("previousPage")
             .setLabel("Anterior")
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
+            .setCustomId("selectPage")
             .setLabel("Selecionar")
             .setEmoji("🔍")
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
+            .setCustomId("nextPage")
             .setLabel("Próximo")
             .setStyle(ButtonStyle.Primary)
     ]
@@ -63,17 +66,17 @@ class PaginatorComponent extends EventEmitter {
             if (controlStyle.selectButton) this.buttons[1] = controlStyle.selectButton;
             if (controlStyle.nextButton) this.buttons[2] = controlStyle.nextButton;
         }
-        this.view.on('nextPage', this.nextPageInteraction);
-        this.view.on('previousPage', this.previousPageInteraction);
+        this.view.on('nextPage', this.nextPageInteraction.bind(this));
+        this.view.on('previousPage', this.previousPageInteraction.bind(this));
     }
     private addPaginationControls(page: Page) {
         if (page.hasControls) return page;
         page.hasControls = true;
         const components = page.components ?? []
 
-        if (!this.flags.includes(PaginatorFlags.RemovePrevious)) this.buttons[0].setCustomId('previousPage');
-        if (!this.flags.includes(PaginatorFlags.RemoveSelect)) this.buttons[1].setCustomId('selectPage');
-        if (!this.flags.includes(PaginatorFlags.RemoveNext)) this.buttons[2].setCustomId('nextPage');
+        if (this.flags.includes(PaginatorFlags.RemovePrevious)) this.buttons.splice(0,1)
+        if (this.flags.includes(PaginatorFlags.RemoveSelect)) this.buttons.splice(1,1)
+        if (this.flags.includes(PaginatorFlags.RemoveNext)) this.buttons.splice(2,1)
         const row = new ActionRowBuilder<any>()
             .setComponents(this.buttons);
         // @ts-ignore

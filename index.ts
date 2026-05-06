@@ -27,7 +27,7 @@ if (!file.includes('DISCORD_TOKEN')) throw new Error('No DISCORD_TOKEN found in 
 
 // Configure logger settings
 // pt-br: Configura as configurações do logger
-function createLogger(service: string, hexColor: string): winston.Logger {
+export function createLogger(service: string, hexColor: string): winston.Logger {
     return winston.createLogger({
         levels: winston.config.syslog.levels,
         level: process.env.DEBUG === 'true' ? 'debug' : 'info',
@@ -141,19 +141,16 @@ logger.notice('Connecting to Discord...');
 const dClient = new Client({intents: 131071, partials: [
     Partials.Channel
     ]});
-
+const client = dClient as ExtendedClient
 
 const lock = new AsyncLock();
 dClient.setMaxListeners(30)
 dClient.login(process.env.DISCORD_TOKEN).then(async (): Promise<void> => {
-    const client = dClient as ExtendedClient;
     logger.notice(`Logged in as ${chalk.hex('#00aaff')(client.user?.tag)}`);
     const dbLogger = logger.child({service: `Database`, hexColor: '#33f517'});
     dbLogger.notice('Connecting to MongoDB...');
     await lock.acquire('db', async () => {
         await mongoose.connect(process.env.MONGODB_SRV as string, {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
         } as ConnectOptions).then(() => {
             dbLogger.notice(`Database was successfully connected: ${mongoose.connection.name}`)
             client.emit('dbReady');
@@ -211,7 +208,9 @@ dClient.login(process.env.DISCORD_TOKEN).then(async (): Promise<void> => {
     logger.notice(`Guild schema has the keys: ${chalk.green(guildKeys.join(', '))}`);
     const userSchema = new mongoose.Schema(userData)
     const guildSchema = new mongoose.Schema(guildData)
-
+    //userSchema.post("save", userData => {
+        //client.profileHandler.clearUserFromCache(userData.id, userData.guildId as unknown as string)
+    //})
     userSchema.plugin(require('mongoose-autopopulate'))
     guildSchema.plugin(require('mongoose-autopopulate'))
     const user = mongoose.model('user', userSchema)
@@ -229,3 +228,7 @@ dClient.login(process.env.DISCORD_TOKEN).then(async (): Promise<void> => {
         client.emit('startTicks')
     })
 })
+
+export {
+    client as Client
+}

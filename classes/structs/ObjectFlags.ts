@@ -7,6 +7,7 @@ import {Logger} from "winston";
 type HasData = Record<string, any> & {
     data: any
     id: string
+    save(): void
 }
 
 export class ObjectFlags {
@@ -18,6 +19,7 @@ export class ObjectFlags {
         this.object = object
         this.logger = client.logger.child({service: `${object.id} Flags`, hexColor: '#aa00ff'})
     }
+    //* Save is async, keeps running in the background via internal object queue
     public set(flag: string, value: string | boolean | string[] | number) {
         if (!this.client.flags.flags.has(flag)) {
             this.logger.warning(`Flag ${flag} is not registered, ignoring`)
@@ -25,7 +27,7 @@ export class ObjectFlags {
         }
         this.object.data.flags.set(flag, value);
         (this.object.data as HydratedDocument<any>).markModified('flags')
-        this.object.data.save()
+        this.object.save()
         return this
     }
     public awaitableSet(flag: string, value: string | boolean | string[] | number) {

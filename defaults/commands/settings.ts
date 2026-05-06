@@ -12,7 +12,8 @@ import {ExtendedClient} from "../../types";
 
 
 export async function saveSetting(setting: Setting<unknown>, result: any, profile: User, isGuild: boolean, client: ExtendedClient) {
-    if (!result) {
+    client.emit(`settings.update.${setting.id}`)
+    if (!result && result !== false) {
         setting.value = undefined
     } else {
         setting.value = result
@@ -25,12 +26,6 @@ export async function saveSetting(setting: Setting<unknown>, result: any, profil
         await defaultSaveMethod(client, entity, setting)
     }
 }
-export async function addValueToArraySettingAndSave(setting: Setting<unknown>, addedValue: any, profile: User, isGuild: boolean, client: ExtendedClient) {
-    const value = setting.value as Array<unknown>
-    value.push(addedValue)
-    return saveSetting(setting, value, profile, isGuild, client)
-}
-
 export default new SlashCommand({
     data: new SlashCommandBuilder()
         .setName('configurações')
@@ -156,6 +151,6 @@ export default new SlashCommand({
                 name: `${setting.displayName}`,
                 value: setting.name
             }
-        }))
+        })).catch(() => {})
     }
 })

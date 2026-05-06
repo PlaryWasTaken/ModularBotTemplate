@@ -3,18 +3,17 @@ import {
     ButtonInteraction,
     EmbedBuilder, GuildTextBasedChannel,
     InteractionCollector,
-    Message,
-    TextBasedChannel
+    Message
 } from "discord.js";
 import {EventEmitter} from "events";
-import {PartialGroupDMIsANightmare} from "../../types";
+import {FuckDiscordJS} from "../../types";
 
 
 export class EmbedMenu extends EventEmitter {
     private embed: EmbedBuilder;
     private row: ActionRowBuilder<any>[];
     private channel: GuildTextBasedChannel;
-    private msg: PartialGroupDMIsANightmare;
+    private msg: FuckDiscordJS;
     private collector: InteractionCollector<ButtonInteraction>;
     private last: {
         embed: EmbedBuilder,
@@ -30,7 +29,7 @@ export class EmbedMenu extends EventEmitter {
             embed: embed,
             row: rowArray
         }
-        this.msg = msg as PartialGroupDMIsANightmare
+        this.msg = msg as FuckDiscordJS
         this.row = rowArray
         this.channel = msg.channel as GuildTextBasedChannel
         this.authorUserId = authorId
@@ -94,7 +93,7 @@ export class EmbedMenu extends EventEmitter {
     }
 
     setDisabled(customId: string, disabled: boolean) {
-        return new Promise<void>(async (resolve, reject) => {
+        return new Promise<void>(async (resolve) => {
             const button = this.row.filter((row) => row.components.find((button) => button.customId === customId))[0].components.find((button) => button.customId === customId)
             if (button) {
                 button.setDisabled(disabled)

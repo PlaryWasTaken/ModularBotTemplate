@@ -33,7 +33,6 @@ import {settingData} from "./index";
 import {FlagsManager} from "./classes/managers/FlagsManager";
 import {PermissionsManager} from "./classes/managers/PermissionsManager";
 import SharedClientsManager from "./classes/managers/SharedClientsManager";
-
 type configFunc = (args: {
     client: ExtendedClient,
     logger: Logger,
@@ -92,7 +91,7 @@ interface SlashCommandConstructor extends BaseCommandConstructor {
 interface SlashCommandArgs {
     client: ExtendedClient,
     logger: Logger,
-    interaction: IDoNotCareAboutPartialGroupDMs<ChatInputCommandInteraction>,
+    interaction: FuckDiscordJSReallyFuckThem<ChatInputCommandInteraction>,
     profile: User,
     guild: Guild,
     interfacer: BaseModuleInterfacer
@@ -297,6 +296,6 @@ type PermissionOverrideTree = RecursiveMap<OverrideNode>
 
 type PermissionNode = (client: ExtendedClient, path: string, member: GuildMember, channel: TextChannel) => Awaitable<boolean>
 
-type PartialGroupDMIsANightmare = OmitPartialGroupDMChannel<Message<boolean>>
+type FuckDiscordJS = OmitPartialGroupDMChannel<Message<boolean>>
 
-type IDoNotCareAboutPartialGroupDMs<T> = OmitPartialGroupDMChannel<T>
+type FuckDiscordJSReallyFuckThem<T> = OmitPartialGroupDMChannel<T>

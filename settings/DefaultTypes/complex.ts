@@ -30,8 +30,8 @@ function chunkArr<T>(arr: T[], size: number): T[][] {
 }
 
 function checkFilledSchema(currentConfig: ComplexSettingClass): boolean {
-    for (const [key, value] of currentConfig.schema) {
-        if (!(currentConfig.value as any)?.[key] && !currentConfig.optionals?.includes(key) && (currentConfig.value as any)?.[key] !== 0) return false
+    for (const [key] of currentConfig.schema) {
+        if (!((currentConfig.value as any)?.[key] !== undefined && (currentConfig.value as any)?.[key] !== null) && !currentConfig.optionals?.includes(key) && (currentConfig.value as any)?.[key] !== 0) return false
     }
     return true
 }

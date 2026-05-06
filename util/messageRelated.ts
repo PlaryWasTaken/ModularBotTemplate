@@ -1,11 +1,7 @@
 import {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle, Collection,
+    ActionRowBuilder, Collection,
     EmbedBuilder, GuildTextBasedChannel,
-    HexColorString,
-    Message,
-    TextBasedChannel
+    Message
 } from "discord.js";
 import {EmbedMenu} from "./classes/EmbedMenu";
 
@@ -98,5 +94,28 @@ export function getAllChannelMessages(channel: GuildTextBasedChannel) {
             })
         }
         resolve(messages)
+    })
+}
+export function getChannelMessages(channel: GuildTextBasedChannel, number: number) {
+    return new Promise<Collection<string, Message<true>>>(async (res, reject) => {
+        const messages = new Collection<string, Message>()
+        let total = number
+        while (total > 0) {
+            await channel.messages.fetch({
+                limit: 100,
+                before: messages.last()?.id
+            }).then((fetched) => {
+                if (fetched.size === 0) {
+                    res(messages as Collection<string, Message<true>>)
+                }
+                fetched.forEach((msg) => {
+                    messages.set(msg.id, msg)
+                })
+                total -= 100
+            }).catch((err) => {
+                reject(err)
+            })
+        }
+        res(messages as Collection<string, Message<true>>)
     })
 }

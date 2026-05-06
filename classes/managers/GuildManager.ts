@@ -7,7 +7,7 @@ import {StopWatch} from "@slime/stopwatch";
 
 async function getAllSettings(client: ExtendedClient, guildData: any, guild: discordGuild, logger: Logger) {
     const settings = client.modules.map((module) => module.settings).flat()
-    console.log(settings.map(sett => sett.id))
+    //console.log(settings.map(sett => sett.id))
     const settingsMap = new Collection<string, Setting<unknown>>()
     const stopWatch = new StopWatch()
     const perfStats = new Collection<string, number>()
@@ -27,7 +27,15 @@ async function getAllSettings(client: ExtendedClient, guildData: any, guild: dis
         stopWatch.startTimer()
         if (setting.load) {
             setting.value = await setting.load(guild, guildData)
+            stopWatch.stopTimer()
+            logger.info(`Loaded setting ${setting.id} in ${stopWatch.getTimeElapsedInMs}ms`, {
+                setting: setting.id,
+                time: stopWatch.getTimeElapsedInMs
+            })
+            perfStats.set(setting.id, stopWatch.getTimeElapsedInMs)
+            perfTimeTotal += stopWatch.getTimeElapsedInMs
             settingsMap.set(setting.id, setting)
+            stopWatch.reset()
             continue
         }
         if (settingData) {
@@ -85,25 +93,26 @@ export default class GuildManager {
         return new Promise(async (resolve, err) => {
             if (this.client.globalLock.isBusy('fullyReady')) await this.client.globalLock.acquire('fullyReady', () => {
             })
+                const guild =
+                    force ?
+                        this.client.guilds.cache.get(id) || await this.client.guilds.fetch(id).catch(() => {
+                        }) :
+                        await this.client.guilds.fetch(id).catch(() => {
+                        })
 
-            const guild =
-                force ?
-                    this.client.guilds.cache.get(id) || await this.client.guilds.fetch(id).catch(() => {}) :
-                    await this.client.guilds.fetch(id).catch(() => {})
-
-            if (!guild) return err('No guild!')
-            let guildData = await this.client.defaultModels.guild.findOne({id: id})
-            if (!guildData) {
-                const profile = await this.client.defaultModels.guild.create({
-                    id: id
-                })
-                await profile.save()
-                guildData = profile
-            }
-            const settings = this.settingCache.get(id) ?? await getAllSettings(this.client, guildData, guild, this.logger)
-            this.settingCache.set(id, settings)
-            return resolve(new Guild(this.client, guild, guildData, settings))
-        })
+                if (!guild) return err(`No guild! ${id}`)
+                let guildData = await this.client.defaultModels.guild.findOne({id: id})
+                if (!guildData) {
+                    const profile = await this.client.defaultModels.guild.create({
+                        id: id
+                    })
+                    await profile.save()
+                    guildData = profile
+                }
+                const settings = this.settingCache.get(id) ?? await getAllSettings(this.client, guildData, guild, this.logger)
+                this.settingCache.set(id, settings)
+                return resolve(new Guild(this.client, guild, guildData, settings))
+            })
     }
 
     findByKV(filter: any): Promise<Array<Guild>> {

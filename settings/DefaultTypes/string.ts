@@ -7,7 +7,7 @@ import {
 } from "discord.js";
 import {InteractionView} from "../../utils/InteractionView";
 import {BaseSettingStructure, Setting} from "../Setting";
-import {IDoNotCareAboutPartialGroupDMs} from "../../types";
+import {FuckDiscordJSReallyFuckThem} from "../../types";
 
 
 
@@ -73,7 +73,7 @@ export class StringSettingFile implements Setting<string> {
                 embeds: [embed],
                 components: [buttons]
             })
-            view.on('set', async (i: IDoNotCareAboutPartialGroupDMs<ButtonInteraction>) => {
+            view.on('set', async (i: FuckDiscordJSReallyFuckThem<ButtonInteraction>) => {
                 await i.deferUpdate()
                 const embed = new EmbedBuilder()
                     .setTitle(`Configurar ${this.name}`)
