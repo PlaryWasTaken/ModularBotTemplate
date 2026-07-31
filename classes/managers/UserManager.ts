@@ -152,7 +152,8 @@ export default class userHandler {
             if (this.client.globalLock.isBusy('fullyReady')) await this.client.globalLock.acquire('fullyReady', () => {})
 
             const userProfile = await this.client.defaultModels.user.findOneAndDelete({id: id, guildId: guild})
-            if (!userProfile) err('No user profile!')
+            if (!userProfile) return err('No user profile!')
+            this.cache.invalidate(id, guild)
             resolve(userProfile)
         })
     }
@@ -229,14 +230,37 @@ export default class userHandler {
                 const userArray: User[] = []
                 for (const guild of guildArray) {
                     const members = usersByGuild.get(guild.guild.id) as Collection<string, GuildMember> | GuildMember | undefined
-                    if (members instanceof Collection) {
-                        for (const member of members.values()) {
-                            const data = userProfiles.find((profile: User) => profile.id === member.id)
-                            userArray.push(new User(this.client, member, guild, await getAllSettings(this.client, data, guild.guild, this.logger, member), data))
-                        }
-                    } else if (members instanceof GuildMember) {
-                        const data = userProfiles.find((profile: User) => profile.id === members.id)
-                        userArray.push(new User(this.client, members, guild, await getAllSettings(this.client, data, guild.guild, this.logger, members), data))
+                    const guildMembers = members instanceof Collection
+                        ? [...members.values()]
+                        : members instanceof GuildMember
+                            ? [members]
+                            : []
+
+                    for (const member of guildMembers) {
+                        const data = userProfiles.find(
+                            (profile: HydratedDocument<any>) =>
+                                profile.id === member.id &&
+                                profile.guildId === guild.guild.id
+                        )
+                        if (!data) continue
+
+                        await this.client.globalLock.acquire(member.id + guild.guild.id, async () => {
+                            const cachedUser = this.fetchFromCache(member.id, guild.guild.id)
+                            if (cachedUser) {
+                                userArray.push(cachedUser)
+                                return
+                            }
+
+                            const fetchedUser = new User(
+                                this.client,
+                                member,
+                                guild,
+                                await getAllSettings(this.client, data, guild.guild, this.logger, member),
+                                data
+                            )
+                            this.cache.set(member.id + guild.guild.id, fetchedUser)
+                            userArray.push(fetchedUser)
+                        })
                     }
                 }
                 resolve(userArray)
@@ -251,3 +275,4 @@ export default class userHandler {
         this.cache.invalidate(id, guild)
     }
 }
+// Ve oque achar melhor ai plary
