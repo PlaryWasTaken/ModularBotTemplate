@@ -136,7 +136,7 @@ export default class userHandler {
                 const member = await guildObj.guild.members.fetch(id).catch(() => {
                 })
                 if (!member) {
-                    await userProfile.delete()
+                    //await userProfile.delete()
                     return err('No member!')
                 }
                 this.logger.debug(`Fetched user ${id} from guild ${guild}`)

@@ -8,7 +8,7 @@ import {
 } from "discord.js";
 import {EventEmitter} from "events";
 import {Awaitable} from "@discordjs/util";
-import {genRandomHexId} from "../util/stringRelated";
+import {genRandomHexId} from "./stringRelated";
 
 type ExtraOptions =  {
     ephemeral?: boolean,

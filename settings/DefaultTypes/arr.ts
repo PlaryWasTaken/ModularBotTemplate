@@ -8,10 +8,10 @@ import {
     StringSelectMenuBuilder
 } from "discord.js";
 import {ExtendedClient} from "../../types";
-import {InteractionView} from "../../utils/InteractionView";
+import {InteractionView} from "../../util/InteractionView";
 import {Setting} from "../Setting";
 import {arrayChunk} from "../../util/arrayRelated";
-import {createPaginator, Page, PaginatorFlags} from "../../utils/components/PaginatorComponent";
+import {createPaginator, Page, PaginatorFlags} from "../../util/components/PaginatorComponent";
 
 function parseSettingToArrayFields(current: Return[], parseFunction?: (value: Return) => string) {
     const inlined = (current?.length || 0) > 5

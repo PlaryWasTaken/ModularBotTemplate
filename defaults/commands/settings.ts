@@ -2,17 +2,16 @@ import SlashCommand from "../../classes/structs/SlashCommand";
 import {
     SlashCommandBuilder,
     PermissionsBitField,
-    GuildTextBasedChannel, GuildMember, TextChannel
+    GuildTextBasedChannel, GuildMember, TextChannel, MessageFlags
 } from "discord.js";
 import fuse from "fuse.js";
-import {InteractionView} from "../../utils/InteractionView";
+import {InteractionView} from "../../util/InteractionView";
 import {defaultSaveMethod, Setting} from "../../settings/Setting";
 import User from "../../classes/structs/User";
 import {ExtendedClient} from "../../types";
 
 
 export async function saveSetting(setting: Setting<unknown>, result: any, profile: User, isGuild: boolean, client: ExtendedClient) {
-    client.emit(`settings.update.${setting.id}`)
     if (!result && result !== false) {
         setting.value = undefined
     } else {
@@ -25,6 +24,8 @@ export async function saveSetting(setting: Setting<unknown>, result: any, profil
         const entity = isGuild ? profile.guild : profile
         await defaultSaveMethod(client, entity, setting)
     }
+
+    client.emit(`settings.update.${setting.id}`, setting, profile)
 }
 export default new SlashCommand({
     data: new SlashCommandBuilder()
@@ -54,23 +55,22 @@ export default new SlashCommand({
         if (!guildSetting && !userSetting ) return interaction.reply({content: 'Configuração não encontrada.. :(', ephemeral: true});
         const setting = (guildSetting || userSetting) as Setting<unknown>
 
-        const overrides = guild.permissionOverrides.getEndNode(`Setting.${setting.id}`);
-        let computed: boolean | null = null;
-        if (overrides) {
-            computed = await client.permissionHandler.computePermissions(overrides, interaction.member as GuildMember, interaction.channel as TextChannel);
-            if (computed === false) return interaction.reply({
+        const overrides = await client.permissionHandler.resolve(`Setting.${setting.id}`, guild.permissionOverrides, interaction.member as GuildMember, interaction.channel as TextChannel);
+        if (overrides.status === "denied") {
+            return interaction.reply({
                 content: `Você não tem permissão para mudar essa configuração`,
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             })
         }
-
-        if (setting.permission && !profile.member.permissions.has(setting.permission) && computed !== true ) return interaction.reply({
-            content: 'Você não tem permissão para mudar essa configuração',
-            ephemeral: true
-        });
+        if (overrides.status === "unknown" || overrides.status === "abstained") {
+            if (setting.permission && !profile.member.permissions.has(setting.permission)) return interaction.reply({
+                content: 'Você não tem permissão para mudar essa configuração',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         if (setting.condition && !setting.condition(guild, profile)) return interaction.reply({
             content: 'Essa configuração não está disponível no momento para você',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
 
         const view = new InteractionView(interaction, interaction.channel as GuildTextBasedChannel, client, {
@@ -119,15 +119,12 @@ export default new SlashCommand({
         const allSettings = [...guilds, ...users]
         const allowedSettings = [] as typeof allSettings
         for (const setting of allSettings) {
-            const overrides = guild.permissionOverrides.getEndNode(`Setting.${setting.id}`);
-            let computed: boolean | null = null;
-            if (overrides) {
-                computed = await client.permissionHandler.computePermissions(overrides, interaction.member as GuildMember, interaction.channel as TextChannel);
-                if (computed === true) {
-                    allowedSettings.push(setting)
-                    continue
-                }
+            const overrides = await client.permissionHandler.resolve(`Setting.${setting.id}`, guild.permissionOverrides, interaction.member as GuildMember, interaction.channel as TextChannel);
+            if (overrides.status === "granted") {
+                allowedSettings.push(setting)
+                continue
             }
+
             if (typeof interaction.member.permissions !== 'string' &&
                 interaction.member.permissions.has(setting.permission || PermissionsBitField.Flags.Administrator)
             ) allowedSettings.push(setting)

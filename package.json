@@ -11,7 +11,7 @@
     "build": "npm run generate:user-augments && npm i && rm -rf dist/* && tsc",
     "buildCoolify": "rm modules/* -r && npm run build",
     "postbuild": "copyfiles **/*.json **/*.txt .env -e *.json dist && del-cli \"dist/node_modules\" \"dist/dist\" \"dist/web\"",
-    "postinstall": "node postinstall.mjs"
+    "postinstall": "node scripts/postinstall.mjs"
   },
   "author": "Plary",
   "license": "ISC",
@@ -33,8 +33,9 @@
     "rxjs": "^7.8.2",
     "sharp": "^0.32.0",
     "snowflakify": "^1.0.5",
-    "typescript": "^5.3.3",
+    "typescript": "^7.0.2",
     "winston": "^3.8.2",
+    "fuzzysort": "^3.1.0",
     "yaml": "2.8.3"
   },
   "devDependencies": {

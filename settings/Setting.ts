@@ -1,4 +1,4 @@
-import {InteractionView} from "../utils/InteractionView";
+import {InteractionView} from "../util/InteractionView";
 import {Awaitable} from "@discordjs/util";
 import Guild from "../classes/structs/Guild";
 import {Guild as DiscordGuild, GuildMember} from "discord.js";

@@ -5,7 +5,7 @@ import {
     ButtonStyle,
     EmbedBuilder, StringSelectMenuBuilder, StringSelectMenuInteraction
 } from "discord.js";
-import {InteractionView} from "../../utils/InteractionView";
+import {InteractionView} from "../../util/InteractionView";
 import {BaseSettingStructure, Setting} from "../Setting";
 
 type SelectSettingStructure = BaseSettingStructure & {

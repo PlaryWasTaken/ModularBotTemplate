@@ -1,13 +1,15 @@
 import SlashCommand from "../../classes/structs/SlashCommand";
 import {
     SlashCommandBuilder,
-    PermissionsBitField
+    PermissionsBitField,
+    EmbedBuilder,
+    TextChannel, MessageFlags,
 } from "discord.js";
 import yaml from "yaml";
-import {isEndNode, Permissions} from "../../classes/structs/Permissions";
+import {  Permissions } from "../../classes/structs/Permissions";
+import { compileOverrides, decompilePermissions, OverrideConfig } from "../../util/PermissionCompilation";
 import axios from "axios";
-import {parseToDatabase} from "../../util/parsingRelated";
-import {PermissionOverrideTree} from "../../types";
+import { parseToDatabase } from "../../util/parsingRelated";
 
 export function tryParseYAML(value: string): any {
     try {
@@ -16,14 +18,6 @@ export function tryParseYAML(value: string): any {
         return null;
     }
 }
-
-
-type ImportOverride = {
-    id: string,
-    permitir: string[], // Should be module IDs with correct namespacing
-    negar: string[]     // Same as above
-}
-
 
 export default new SlashCommand({
     data: new SlashCommandBuilder()
@@ -45,173 +39,185 @@ export default new SlashCommand({
             subcommand
                 .setName('listar')
                 .setDescription("Lista os overrides de permissão")
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('avaliar')
+                .setDescription("Avalia e depura permissões para um membro")
+                .addUserOption(option =>
+                    option
+                        .setName('membro')
+                        .setDescription('Membro a ser avaliado')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('caminho')
+                        .setDescription('Caminho de permissão a verificar (ex: Commands.ban). Omita para ver todos os resolvers ativos.')
+                        .setRequired(false)
+                )
+                .addChannelOption(option =>
+                    option
+                        .setName('canal')
+                        .setDescription('Canal de contexto (padrão: canal atual)')
+                        .setRequired(false)
+                )
         ),
-    func: async ({interaction, logger, guild}) => {
+
+    func: async ({ interaction, logger, guild, client, profile }) => {
         switch (interaction.options.getSubcommand()) {
+
+            // ─── SETAR ────────────────────────────────────────────────────────
             case 'setar': {
                 const attachment = interaction.options.getAttachment('permissão');
-                if (!attachment) return interaction.reply({
-                    content: 'Anexo inválido',
-                    ephemeral: true
-                });
-                if (!attachment.contentType || !attachment.contentType.includes('text/plain')) return interaction.reply({
-                    content: 'Anexo inválido',
-                    ephemeral: true
-                });
-                const attachmentData = attachment.url
-                const data = await axios.get(attachmentData).then(res => res.data).catch(() => null)
-                if (typeof data !== 'string') return interaction.reply({
-                    content: 'Anexo inválido',
-                    ephemeral: true
-                });
+                if (!attachment) return interaction.reply({ content: 'Anexo inválido', ephemeral: true });
+                if (!attachment.contentType?.includes('text/plain')) return interaction.reply({ content: 'Anexo deve ser um arquivo de texto', ephemeral: true });
 
-                const permission = tryParseYAML(data) as {
-                    overrides: ImportOverride[]
+                const raw = await axios.get(attachment.url).then(r => r.data).catch(() => null);
+                if (typeof raw !== 'string') return interaction.reply({ content: 'Não foi possível ler o anexo', ephemeral: true });
+
+                const parsed = tryParseYAML(raw) as { overrides: OverrideConfig[] } | null;
+                if (!parsed?.overrides || !Array.isArray(parsed.overrides)) {
+                    return interaction.reply({ content: 'YAML inválido: esperado `overrides: []`', ephemeral: true });
                 }
-                if (!permission || !permission.overrides || !(permission.overrides instanceof Array)) return interaction.reply({
-                    content: 'Permissão inválida',
-                    ephemeral: true
-                });
-                let logs = [] as string[];
-                const translatedOverrides = new Permissions(logger, new Map())
-                for (const override of permission.overrides) {
-                    if (!override.negar && !override.permitir) {
-                        logs.push(`Permissão base inválida para ${override.id}`)
-                        continue;
-                    }
-                    if (!(override.negar instanceof Array) || !(override.permitir instanceof Array)) {
-                        logs.push(`Permissão inválida para ${override.id}`)
-                        continue;
-                    }
-                    for (const module of override.negar) {
-                        const data = translatedOverrides.getEndNode(module, true)
-                        if (!data) translatedOverrides.set(module, {
-                            allow: [],
-                            deny: [
-                                override.id
-                            ]
-                        })
-                        else {
-                            data.deny.push(override.id)
-                            translatedOverrides.set(module, data)
-                        }
-                    }
-                    for (const module of override.permitir) {
-                        const data = translatedOverrides.getEndNode(module, true)
-                        if (!data) translatedOverrides.set(module, {
-                            allow: [
-                                override.id
-                            ],
-                            deny: []
-                        })
-                        else {
-                            data.allow.push(override.id)
-                            translatedOverrides.set(module, data)
-                        }
-                    }
+
+                // Validate all entries upfront before touching any state
+                const invalid = parsed.overrides.filter(o =>
+                    !o.id ||
+                    !Array.isArray(o.allow) ||
+                    !Array.isArray(o.deny)
+                );
+                if (invalid.length > 0) {
+                    return interaction.reply({
+                        content: `Overrides inválidos (faltando id, allow ou deny):\n${invalid.map(o => `• ${o.id ?? '(sem id)'}`).join('\n')}`,
+                        ephemeral: true,
+                    });
                 }
-                if (logs.length > 0) return interaction.reply({
-                    content: logs.join('\n'),
-                    ephemeral: true
-                });
-                guild.data.permissionsOverrides = parseToDatabase(translatedOverrides.permissions)
-                guild.data.markModified('permissionOverrides');
-                await guild.data.save();
-                guild.permissionOverrides = translatedOverrides;
-                await interaction.reply({
-                    content: 'Permissões atualizadas com sucesso',
-                    ephemeral: true
+
+                const perms = compileOverrides(parsed.overrides, logger);
+
+                const previous = guild.permissionOverrides;
+                try {
+                    guild.data.permissionsOverrides = parseToDatabase(perms.permissions);
+                    guild.data.permissionsResolverConfigs = [...perms.resolverConfigs.entries()];
+                    await guild.data.save();
+                    guild.permissionOverrides = new Permissions(logger, perms.permissions, perms.resolverConfigs);
+                } catch (e) {
+                    guild.permissionOverrides = previous; // rollback in-memory state
+                    logger.error('Falha ao salvar permissões', e);
+                    return interaction.reply({ content: 'Erro ao salvar permissões', ephemeral: true });
+                }
+                client.guildHandler.invalidateCache(guild.id)
+                return interaction.reply({
+                    content: `Permissões atualizadas com sucesso.\n> ${perms.activeIds.size} resolvers ativos, ${parsed.overrides.length} overrides compilados.`,
+                    flags: MessageFlags.Ephemeral,
                 });
             }
-                break;
+
             case 'listar': {
-                const translatedOverrides = {
-                    overrides: [] as ImportOverride[]
+                const overrides = decompilePermissions(
+                    guild.permissionOverrides.permissions,
+                    guild.permissionOverrides.resolverConfigs
+                );
+
+                if (overrides.length === 0) {
+                    return interaction.reply({ content: 'Nenhum override configurado.', ephemeral: true });
                 }
-                function recurseThroughTree(permissions: PermissionOverrideTree = guild.permissionOverrides.permissions, path: string = '') {
-                    for (const [branch, value] of permissions) {
-                        if (isEndNode(value)) {
-                            for (const allow of value.allow) {
-                                const existing = translatedOverrides.overrides.find(override => override.id === allow)
-                                if (!existing) {
-                                    translatedOverrides.overrides.push({
-                                        id: allow,
-                                        permitir: [
-                                            path ? `${path}.${branch}` : branch
-                                        ],
-                                        negar: []
-                                    })
-                                } else {
-                                    if (!existing.permitir.includes(path ? `${path}.${branch}` : branch)) {
-                                        existing.permitir.push(path ? `${path}.${branch}` : branch)
-                                    }
-                                }
-                            }
-                            for (const deny of value.deny) {
-                                const existing = translatedOverrides.overrides.find(override => override.id === deny)
-                                if (!existing) {
-                                    translatedOverrides.overrides.push({
-                                        id: deny,
-                                        permitir: [],
-                                        negar: [
-                                            path ? `${path}.${branch}` : branch
-                                        ]
-                                    })
-                                } else {
-                                    if (!existing.negar.includes(path ? `${path}.${branch}` : branch)) {
-                                        existing.negar.push(path ? `${path}.${branch}` : branch)
-                                    }
-                                }
-                            }
-                        } else {
-                            recurseThroughTree(value, path ? `${path}.${branch}` : branch)
-                        }
-                    }
-                }
-                recurseThroughTree();
-                const file = Buffer.from(yaml.stringify(translatedOverrides))
-                await interaction.reply({
-                    files: [{
-                        attachment: file,
-                        name: 'overrides.yaml'
-                    }],
-                    ephemeral: true
-                })
+
+                const file = Buffer.from(yaml.stringify({ overrides }));
+                return interaction.reply({
+                    files: [{ attachment: file, name: 'overrides.yaml' }],
+                    ephemeral: true,
+                });
             }
-                break;
-            /*
+
+            // ─── AVALIAR ──────────────────────────────────────────────────────
             case 'avaliar': {
-                const role = interaction.options.getRole('cargo');
-                if (!role) return interaction.reply({
-                    content: 'Cargo inválido',
-                    ephemeral: true
-                });
-                const permissionOverrides = guild.permissionOverrides.filter(override => override.allow.roles.includes(role.id) || override.disallow.roles.includes(role.id));
-                const rolePerms = role.permissions as PermissionsBitField;
-                const slashPermissions = client.commands.slash.filter(command => {
-                    const definedData = command.data.toJSON()
-                    const permissionRequired = definedData.default_member_permissions ?? definedData.default_permission
-                    if (!permissionRequired) return true;
-                    return rolePerms.has(BigInt(permissionRequired))
-                })
-                const textPermissions = client.commands.text.filter((command, key) => {
-                    if (command.aliases.includes(key)) return false; // Ignore aliases
-                    const definedData = command.permissions
-                    if (!definedData) return true;
-                    return definedData.some(permission => rolePerms.has(permission))
-                })
+                await interaction.deferReply({ ephemeral: true });
+
+                const targetUser = interaction.options.getUser('membro', true);
+                const permPath   = interaction.options.getString('caminho');
+                const channel    = (interaction.options.getChannel('canal') ?? interaction.channel) as TextChannel;
+
+                const member = await interaction.guild!.members.fetch(targetUser.id).catch(() => null);
+                if (!member) return interaction.editReply({ content: 'Membro não encontrado no servidor.' });
+
+                const manager = client.permissionHandler;
+                const cache = new Map(); // shared per this interaction
+
+                // ── Active subjects ───────────────────────────────────────────
+                const subjects = await manager.resolveSubjects(guild.permissionOverrides, member, channel, cache);
+                const meta     = manager.resolveMeta(guild.permissionOverrides, subjects);
+
+                // ── Per-path resolution (if requested) ───────────────────────
+                let pathBlock = '';
+                if (permPath) {
+                    const result = await manager.resolve(permPath, guild.permissionOverrides, member, channel, cache);
+
+                    const statusEmoji: Record<string, string> = {
+                        granted:   '✅',
+                        denied:    '❌',
+                        unknown:   '❓',
+                        abstained: '⬜',
+                    };
+
+                    const statusLabel: Record<string, string> = {
+                        granted:   'Permitido',
+                        denied:    'Negado',
+                        unknown:   'Caminho desconhecido (não registrado na árvore)',
+                        abstained: 'Sem regra correspondente (padrão: negar)',
+                    };
+
+                    pathBlock = [
+                        `**Caminho:** \`${permPath}\``,
+                        `**Resultado:** ${statusEmoji[result.status]} ${statusLabel[result.status]}`,
+                        result.meta && Object.keys(result.meta).length > 0
+                            ? `**Meta herdada:**\n${formatMeta(result.meta)}`
+                            : '',
+                    ].filter(Boolean).join('\n');
+                }
+
+                // ── Subjects breakdown ────────────────────────────────────────
+                const subjectsBlock = subjects.length > 0
+                    ? subjects.map(id => `• \`${id}\``).join('\n')
+                    : '_Nenhum resolver ativo para este membro neste canal_';
+
+                const metaBlock = Object.keys(meta).length > 0
+                    ? formatMeta(meta)
+                    : '_Sem meta_';
+
+                // ── Build embed ───────────────────────────────────────────────
                 const embed = new EmbedBuilder()
-                    .setTitle('Permissões do cargo')
-                    .setColor("#f5c6a1")
-                    .setDescription(`Overrides: ${permissionOverrides.map(override => {
-                        return `**${override.id}**\nPermitir: ${override.allow.roles.includes(role.id) ? 'Sim' : 'Não'}\nNegar: ${override.disallow.roles.includes(role.id) ? 'Sim' : 'Não'}`
-                    }).join('\n\n') || "Sem overrides de permissão"}\n\nPermissões de slash: ${slashPermissions.map(command => command.data.name).join(', ')}\n\nPermissões de texto: ${textPermissions.map(command => command.name).join(', ')}`)
-                await interaction.reply({
-                    embeds: [embed]
-                });
+                    .setTitle(`Avaliação de permissões — ${member.displayName}`)
+                    .setColor(subjects.length > 0 ? '#a8d8a8' : '#d8a8a8')
+                    .setThumbnail(member.displayAvatarURL())
+                    .setFooter({ text: `Canal: #${channel.name}` })
+                    .addFields(
+                        {
+                            name: `Resolvers ativos (${subjects.length})`,
+                            value: subjectsBlock,
+                        },
+                        {
+                            name: 'Meta mesclada',
+                            value: metaBlock,
+                        }
+                    );
+
+                if (pathBlock) {
+                    embed.addFields({ name: 'Verificação de caminho', value: pathBlock });
+                }
+
+                return interaction.editReply({ embeds: [embed] });
             }
-             */
         }
     },
-    global: true
-})
+    global: true,
+});
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatMeta(meta: Record<string, any>): string {
+    return Object.entries(meta)
+        .map(([k, v]) => `• \`${k}\`: \`${v}\``)
+        .join('\n');
+}

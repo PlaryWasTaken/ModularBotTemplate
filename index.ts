@@ -16,7 +16,14 @@ import AsyncLock from "async-lock";
 import {FlagsManager} from "./classes/managers/FlagsManager";
 import chalk from "chalk";
 import {PermissionsManager} from "./classes/managers/PermissionsManager";
-import {ChannelsNamespace, RolesNamespace, UsersNamespace} from "./defaults/permissionNamespaces";
+import {
+    AccountAgeNamespace,
+    BoostNamespace,
+    ChannelsNamespace, JoinDateNamespace,
+    PermissionNamespace,
+    RolesNamespace, TimeNamespace,
+    UsersNamespace
+} from "./defaults/permissionNamespaces";
 import SharedClientsManager from "./classes/managers/SharedClientsManager";
 
 require('dotenv').config();
@@ -195,9 +202,14 @@ dClient.login(process.env.DISCORD_TOKEN).then(async (): Promise<void> => {
     client.sharedClients = new SharedClientsManager(client)
     client.logger = logger;
     logger.info('Profile handler and Guild Handler loaded');
-    client.permissionHandler.registerNode("Role.*", RolesNamespace)
-    client.permissionHandler.registerNode("User.*", UsersNamespace)
-    client.permissionHandler.registerNode("Channel.*", ChannelsNamespace)
+    client.permissionHandler.registerResolver("Role", RolesNamespace, 50)
+    client.permissionHandler.registerResolver("User", UsersNamespace, 100)
+    client.permissionHandler.registerResolver("Channel", ChannelsNamespace, 20)
+    client.permissionHandler.registerResolver("Permission", PermissionNamespace, 40)
+    client.permissionHandler.registerResolver("Boost", BoostNamespace, 30)
+    client.permissionHandler.registerResolver("JoinDate", JoinDateNamespace, 20)
+    client.permissionHandler.registerResolver("AccountAge", AccountAgeNamespace, 30)
+    client.permissionHandler.registerResolver("Time", TimeNamespace, 20)
     logger.info('Default permission namespaces registered');
 
     const {userData, guildData} = await loadModules(logger, client, lock);

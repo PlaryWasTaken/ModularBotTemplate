@@ -96,7 +96,8 @@ export async function loadModules(logger: winston.Logger, client: ExtendedClient
         id: {type: String, required: true},
         settings: { type: Map, default: new Map() },
         flags: { type: Map, default: new Map() },
-        permissionsOverrides: { type: Array, default: [] }
+        permissionsOverrides: { type: Array, default: [] },
+        permissionsResolverConfigs: { type: Array, default: [] }
     }
     const userObj: mongoseSchemaData = {
         id: {type: String, required: true},

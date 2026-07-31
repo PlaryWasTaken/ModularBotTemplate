@@ -3,7 +3,8 @@ import {
     ButtonInteraction,
     EmbedBuilder, GuildTextBasedChannel,
     InteractionCollector,
-    Message
+    Message,
+    TextBasedChannel
 } from "discord.js";
 import {EventEmitter} from "events";
 import {FuckDiscordJS} from "../../types";
@@ -93,7 +94,7 @@ export class EmbedMenu extends EventEmitter {
     }
 
     setDisabled(customId: string, disabled: boolean) {
-        return new Promise<void>(async (resolve) => {
+        return new Promise<void>(async (resolve, reject) => {
             const button = this.row.filter((row) => row.components.find((button) => button.customId === customId))[0].components.find((button) => button.customId === customId)
             if (button) {
                 button.setDisabled(disabled)

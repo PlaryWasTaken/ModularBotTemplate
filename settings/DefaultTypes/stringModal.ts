@@ -3,7 +3,13 @@ import {
     ButtonBuilder,
     EmbedBuilder,
     ButtonStyle,
-    ButtonInteraction
+    ButtonInteraction,
+    ModalBuilder,
+    LabelBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ModalSubmitInteraction,
+    MessageFlags
 } from "discord.js";
 import {InteractionView} from "../../util/InteractionView";
 import {BaseSettingStructure, Setting} from "../Setting";
@@ -20,7 +26,7 @@ type StringSettingStructure = BaseSettingStructure & {
     }
 }
 
-export class StringSettingFile implements Setting<string> {
+export class StringModalSettingFile implements Setting<string> {
     public type = 'string';
     public complex = false;
     public name: string;
@@ -73,36 +79,8 @@ export class StringSettingFile implements Setting<string> {
                 embeds: [embed],
                 components: [buttons]
             })
-            view.on('set', async (i: FuckDiscordJSReallyFuckThem<ButtonInteraction>) => {
-                await i.deferUpdate()
-                const embed = new EmbedBuilder()
-                    .setTitle(`Configurar ${this.name}`)
-                    .setFields([
-                        {
-                            name: 'Descrição',
-                            value: `${this.description}`,
-                        },
-                        {
-                            name: 'Valor atual',
-                            value: valueText,
-                        }
-                    ])
-                    .setColor(`#ffffff`)
-                    .setFooter({text: 'Você tem 30 segundos para mandar o novo valor'})
-                await view.update({
-                    embeds: [embed],
-                    components: []
-                })
-                const value = await i.channel?.awaitMessages({
-                    filter: m => m.author.id === view.interaction.user.id,
-                    max: 1,
-                    time: 30000
-                }).then(async collected => {
-                    const msg = collected.first()
-                    if (!msg) return undefined
-                    await msg.delete()
-                    return msg.content
-                }).catch(() => undefined)
+            view.on('abc', async(i: ModalSubmitInteraction) => {
+                const value = i.fields.getTextInputValue("configText")
                 if (!value) {
                     const embed = new EmbedBuilder()
                         .setTitle(`Configurar ${this.name}`)
@@ -145,7 +123,7 @@ export class StringSettingFile implements Setting<string> {
                     })
                     return
                 }
-                const newValueText = (value?.length ?? 0) > 1000 ? `Texto não possivel de visualizar` : value ?? 'Não definido'
+                const newValueText = (value?.length ?? 0) > 1000 ? `Texto não possível de visualizar` : value ?? 'Não definido'
                 const embed2 = new EmbedBuilder()
                     .setTitle(`Configurar ${this.name}`)
                     .setFields([
@@ -166,6 +144,10 @@ export class StringSettingFile implements Setting<string> {
                         }
                     ])
                     .setColor(`#ffffff`)
+                await i.reply({
+                    content: "Atualizado",
+                    flags: MessageFlags.Ephemeral
+                })
                 await view.update({
                     embeds: [embed2],
                     components: []
@@ -174,9 +156,27 @@ export class StringSettingFile implements Setting<string> {
                 view = undefined as any // Destroying view to prevent memory leaks
                 resolve(value)
             })
+            view.on('set', async (i: FuckDiscordJSReallyFuckThem<ButtonInteraction>) => {
+                //await i.deferUpdate()
+                const modal = new ModalBuilder()
+                    .setCustomId("abc")
+                    .setTitle(`Editando ${this.name}`)
+                    .setLabelComponents(new LabelBuilder()
+                        .setLabel(this.name)
+                        .setDescription(this.description.slice(0,90))
+                        .setTextInputComponent(
+                            new TextInputBuilder()
+                                .setCustomId("configText")
+                                .setStyle(TextInputStyle.Paragraph)
+                                .setRequired(true)
+                                .setMinLength(1)
+                        )
+                    )
+                await view.showModal(i, modal)
+            })
         })
     }
     clone(): Setting<string> {
-        return new StringSettingFile(this.structure, this.value)
+        return new StringModalSettingFile(this.structure, this.value)
     }
 }

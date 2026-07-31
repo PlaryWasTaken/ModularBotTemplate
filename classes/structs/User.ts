@@ -1,6 +1,6 @@
 import * as discord from "discord.js";
 import Guild from "./Guild"
-import {Collection} from "discord.js";
+import {Collection, TextChannel} from "discord.js";
 import {Setting} from "../../settings/Setting";
 import {ExtendedClient} from "../../types";
 import {ObjectFlags} from "./ObjectFlags";
@@ -60,6 +60,9 @@ export default class User {
             error: (err) => console.log(err)
         })
 
+    }
+    public getMeta(channel: TextChannel) {
+        return this.client.permissionHandler.getMemberMeta(this.guild.permissionOverrides, this.member, channel)
     }
     public save(): void {
         this.saveQueue$.next()

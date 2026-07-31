@@ -8,7 +8,7 @@ import {
     PartialDMChannel, User as DiscordUser
 } from "discord.js";
 import {ExtendedClient} from "../../types";
-import {InteractionView} from "../../utils/InteractionView";
+import {InteractionView} from "../../util/InteractionView";
 import {Setting} from "../Setting";
 
 type ChannelSettingStructure = {

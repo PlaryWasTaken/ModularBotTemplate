@@ -34,16 +34,14 @@ export async function runCommand( commandName: string, message: Message<true>, a
         }
     })
     const guild = await Client.guildHandler.fetchOrCreate(message.guild.id);
-    const overrides = guild.permissionOverrides.getEndNode(`Commands.${command.name}`)
-    let computed: boolean | null = null;
-    if (overrides) {
-        computed = await Client.permissionHandler.computePermissions(overrides, message.member as GuildMember, message.channel as TextChannel);
-        if (computed === false) return message.reply('Você não tem permissão para usar este comando aqui');
-    }
-    if (command.permissions && computed !== true) {
+    const computed = await Client.permissionHandler.resolve(`Commands.${command.name}`, guild.permissionOverrides, message.member as GuildMember, message.channel as TextChannel);
+    const noPermission = `Você não tem permissão para usar este comando`
+
+    if (command.permissions && (computed.status === "unknown" || computed.status === "abstained")) {
         const missingPermissions = command.permissions.filter(perm => !message.member?.permissions.has(perm));
-        if (missingPermissions.length > 0) return message.reply(`Você não tem permissão para usar este comando`);
+        if (missingPermissions.length > 0) return message.reply(noPermission);
     }
+    if (computed.status === "denied") return message.reply(noPermission)
     command.func({
         client: Client,
         message: message,

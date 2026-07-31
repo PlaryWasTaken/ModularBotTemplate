@@ -1,6 +1,6 @@
 import {APIEmbed, EmbedBuilder} from "discord.js";
-import {InteractionView} from "../../utils/InteractionView";
-import {EmbedCreator} from "../../utils/components/EmbedCreatorComponent";
+import {InteractionView} from "../../util/InteractionView";
+import {EmbedCreator} from "../../util/components/EmbedCreatorComponent";
 import {BaseSettingStructure, Setting} from "../Setting";
 
 
@@ -35,7 +35,7 @@ export class EmbedSettingFile implements Setting<EmbedBuilder> {
     public parseToDatabase(value: EmbedBuilder) {
         return value.toJSON()
     }
-    public parse(config: any) {
+    public async parse(config: any) {
         return new EmbedBuilder(config)
     }
     public parseToField(value: EmbedBuilder) {

@@ -1,17 +1,50 @@
 import {OverrideNode, PermissionOverrideTree} from "../../types";
 import {Logger} from "winston";
+import {ActiveResolverIds, ResolverConfigStore} from "../../util/PermissionCompilation";
 
 
 export function isEndNode(node: OverrideNode | PermissionOverrideTree): node is OverrideNode {
     return !(node instanceof Map)
 }
 
+function extractActiveIds(
+    permissions: PermissionOverrideTree,
+    resolverConfigs: ResolverConfigStore
+): ActiveResolverIds {
+    const ids: ActiveResolverIds = new Set()
+
+    function recurse(node: PermissionOverrideTree) {
+        for (const [, value] of node) {
+            if (isEndNode(value)) {
+                value.allow.forEach(id => ids.add(id))
+                value.deny.forEach(id => ids.add(id))
+            } else {
+                recurse(value)
+            }
+        }
+    }
+
+    recurse(permissions)
+    for (const id of resolverConfigs.keys()) ids.add(id)
+
+    return ids
+}
+
 export class Permissions {
     private logger: Logger;
-    public permissions: PermissionOverrideTree;
-    constructor( logger: Logger, permissions: PermissionOverrideTree) {
+    public permissions: PermissionOverrideTree
+    public resolverConfigs: ResolverConfigStore
+    public activeIds: ActiveResolverIds
+
+    constructor(
+        logger: Logger,
+        permissions: PermissionOverrideTree,
+        resolverConfigs: ResolverConfigStore = new Map()
+    ) {
         this.logger = logger;
         this.permissions = permissions;
+        this.resolverConfigs = resolverConfigs
+        this.activeIds = extractActiveIds(this.permissions, this.resolverConfigs)
     }
     set(permission: string, result: {
         allow: string[],

@@ -3,7 +3,7 @@ import {
     EmbedBuilder, Guild, GuildMember,
     UserSelectMenuBuilder, UserSelectMenuInteraction
 } from "discord.js";
-import {InteractionView} from "../../utils/InteractionView";
+import {InteractionView} from "../../util/InteractionView";
 import {Setting} from "../Setting";
 import {ExtendedClient} from "../../types";
 

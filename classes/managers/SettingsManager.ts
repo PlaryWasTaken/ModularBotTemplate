@@ -3,6 +3,7 @@ import {Logger} from "winston";
 import Guild from "../structs/Guild";
 import User from "../structs/User";
 import {Setting} from "../../settings/Setting";
+type EncodedJSON = string // Just to make typings easier to read
 export default class GuildManager {
     private readonly client: ExtendedClient;
     private readonly logger: Logger;

@@ -22,7 +22,7 @@ export default class Guild {
         this.guild = guild
         this.data = guildData
         this.settings = settings
-        this.permissionOverrides = new Permissions(client.logger, parseFromDatabase(guildData.permissionsOverrides || []))
+        this.permissionOverrides = new Permissions(client.logger, parseFromDatabase(guildData.permissionsOverrides || []), new Map(guildData.permissionsResolverConfigs || []))
         this.id = guild.id
         this.flags = new ObjectFlags(client, this)
         this.saveQueue$ = new Subject()
