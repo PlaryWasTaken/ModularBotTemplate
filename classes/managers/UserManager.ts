@@ -275,3 +275,4 @@ export default class userHandler {
         this.cache.invalidate(id, guild)
     }
 }
+// Ve oque achar melhor ai plary
